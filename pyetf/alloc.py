@@ -84,9 +84,9 @@ def mvw_standard(prices,
 
 @mean_var_weights
 def mvw_ledoit_wolf(prices, 
-                 weight_bounds=(0.,1.),
-                 rf = 0.,
-                 options = None):
+                    weight_bounds=(0.,1.),
+                    rf = 0.,
+                    options = None):
     """
     Calculates the mean-variance weights given a DataFrame of returns.
     Wraps mean_var_weights with ledoit_wolf covariance calculation method
@@ -184,7 +184,7 @@ def risk_parity_weights(func_covar, *args, **kwargs):
         Series {col_name: weight}
 
     """
-    if len(args)<6:
+    if len(args)<8:
         raise Exception("Not Enough Parameters")
     returns = args[0]
     initial_weights = args[1]
@@ -192,6 +192,8 @@ def risk_parity_weights(func_covar, *args, **kwargs):
     risk_parity_method = args[3]
     maximum_iterations = args[4]
     tolerance = args[5]
+    min_n = args[6]
+    max_n = args[7]
     
     n = len(returns.columns)
 
@@ -206,6 +208,27 @@ def risk_parity_weights(func_covar, *args, **kwargs):
     # default to equal risk weight
     if risk_weights is None:
         risk_weights = np.ones(n) / n
+    
+    if risk_weights is not None:
+        #
+        
+        min_n = min(n, min_n)
+        max_n = min(n, max_n)
+        if max_n>min_n:
+            #
+            if len(risk_weights)<n:
+                for i in range(min_n, n):
+                    risk_weights.append(0.0)
+            else:
+                for i in range(min_n, n):
+                    risk_weights[i] = 0.0
+            #
+            left_risk = 1-sum(risk_weights)
+            distribute_risk = left_risk/(max_n-min_n)            
+            #
+            min_idx = np.argsort([covar[i,i] for i in range(min_n, len(covar))])[:max_n-min_n] + min_n
+            for i in min_idx:
+                risk_weights[i] = distribute_risk
 
     # calc risk parity weights matrix
     if risk_parity_method == 'ccd':
@@ -229,7 +252,10 @@ def rpw_standard(prices,
                  risk_weights = None,
                  risk_parity_method = 'ccd',
                  maximum_iterations = 100,
-                 tolerance = 1E-8):
+                 tolerance = 1E-8,
+                 min_assets_number = 2,
+                 max_assets_number = 6
+                 ):
     """
     Calculates the equal risk contribution / risk parity weights given a
     DataFrame of returns.
@@ -244,6 +270,8 @@ def rpw_standard(prices,
                 - ccd (cyclical coordinate descent)[default]
         * maximum_iterations (int): Maximum iterations in iterative solutions.
         * tolerance (float): Tolerance level in iterative solutions.
+        * min_assets_number: mininial assets number in portfolio at time t
+        * max_assets_number: maxinial assets number in portfolio at time t
 
     Returns:
         Series {col_name: weight}
@@ -259,7 +287,10 @@ def rpw_ledoit_wolf(prices,
                     risk_weights = None,
                     risk_parity_method = 'ccd',
                     maximum_iterations = 100,
-                    tolerance = 1E-8):
+                    tolerance = 1E-8,
+                    min_assets_number = 2,
+                    max_assets_number = 6
+                    ):
     """
     Calculates the equal risk contribution / risk parity weights given a
     DataFrame of returns.
@@ -274,6 +305,8 @@ def rpw_ledoit_wolf(prices,
                 - ccd (cyclical coordinate descent)[default]
         * maximum_iterations (int): Maximum iterations in iterative solutions.
         * tolerance (float): Tolerance level in iterative solutions.
+        * min_assets_number: mininial assets number in portfolio at time t
+        * max_assets_number: maxinial assets number in portfolio at time t
 
     Returns:
         Series {col_name: weight}
@@ -281,6 +314,24 @@ def rpw_ledoit_wolf(prices,
     """
     r = prices.to_returns().dropna()
     covar = ledoit_wolf(r)[0]
+    return covar
+
+from pyetf.algos import forecast_var_from_garch
+@risk_parity_weights
+def rpw_garch(prices,
+              initial_weights = None,
+              risk_weights = None,
+              risk_parity_method = 'ccd',
+              maximum_iterations = 100,
+              tolerance = 1E-8,
+              min_assets_number = 2,
+              max_assets_number = 6
+              ):
+    r = prices.to_returns().dropna()
+    covar = ledoit_wolf(r)[0]
+    for i in range(len(r.columns)):
+        var, _ = forecast_var_from_garch(100.0*r[r.columns[i]])
+        covar[i,i] = (var/100.0)**(0.5)
     return covar
 
 def to_weights(

@@ -56,4 +56,18 @@ pf1 = prices.to_NAV(w2)
 s =  prices.to_shares(w2)
 pf2 = prices.to_NAV(w2)
 pf3 = prices.to_NAV2(w2)  
-pf4 = prices.to_NAV2(w4)      
+pf4 = prices.to_NAV2(w4)
+
+pf1.calc_stats().display()
+pf2.calc_stats().display()
+pf3.calc_stats().display()
+pf4.calc_stats().display() 
+
+# plot 
+pl = pf4.copy()
+w = w4.copy()
+pl.dropna()
+pl = pl.rebase()
+w.dropna()
+from pyetf.figure import plot_chart
+plot_chart(pl[['NAV','spy']], sub_fill=w)    
