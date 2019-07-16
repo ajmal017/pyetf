@@ -171,7 +171,7 @@ def risk_parity_weights(func_covar, *args, **kwargs):
     DataFrame of returns.
 
     Args:
-        * args[0]: returns (DataFrame): Returns for multiple securities.
+        * args[0]: returns (DataFrame): Returns or Prices for multiple securities.
         * args[1]: initial_weights (list): Starting asset weights [default inverse vol].
         * args[2]: risk_weights (list): Risk target weights [default equal weight].
         * args[3]: risk_parity_method (str): Risk parity estimation method.
@@ -194,7 +194,7 @@ def risk_parity_weights(func_covar, *args, **kwargs):
     tolerance = args[5]
     min_n = args[6]
     max_n = args[7]
-    
+
     n = len(returns.columns)
 
     # calc covariance matrix
@@ -354,7 +354,7 @@ def rpw_future(prices,
 
 from pyetf.algos import forecast_var_from_lstm
 @risk_parity_weights
-def rpw_lstm(prices,
+def rpw_lstm(covar,
              initial_weights = None,
              risk_weights = None,
              risk_parity_method = 'ccd',
@@ -363,16 +363,13 @@ def rpw_lstm(prices,
              min_assets_number = 2,
              max_assets_number = 6
              ):
-    r = prices.to_returns().dropna()
-    covar = ledoit_wolf(r)[0]
-    for i in range(len(prices.columns)):
-        var, _ = forecast_var_from_lstm(prices[prices.columns[i]])
-        covar[i,i] = (var/100.0) #**(0.5)
+    return covar.values
     
 def to_weights(
         prices, 
         func_weighting=rpw_standard, 
-        hist_length=200, 
+        hist_length=200,
+        model=None,
         *args, **kwargs):
     """    
     Calculates the weights of each asset in portfolio.
@@ -400,20 +397,35 @@ def to_weights(
     
     for e in w.columns:
         w[e] = np.nan
-    
-    if hist_length >= 0:
-        m = hist_length
-        # 0:m -> m
-        # python - [0:m] -> [m-1]  
-        for t in range(0, len(prices)-m+1):
-            p = prices.iloc[t:t+m]    
-            w.iloc[t+m-1] = func_weighting(p, *args, **kwargs)
-    else: # hist_length < 0 : use future data
-        m = -hist_length
-        for t in range(0, len(prices)-m+1):
-            p = prices.iloc[t:t+m] 
-            w.iloc[t] = func_weighting(p, *args, **kwargs)
-            
+    if model is None:
+        if hist_length > 0:
+            m = hist_length
+            # 0:m -> m
+            # python - [0:m] -> [m-1]  
+            for t in range(0, len(prices)-m+1):
+                p = prices.iloc[t:t+m]    
+                w.iloc[t+m-1] = func_weighting(p, *args, **kwargs)
+        elif hist_length > 0: # hist_length < 0 : use future data
+            m = -hist_length
+            for t in range(0, len(prices)-m+1):
+                p = prices.iloc[t:t+m] 
+                w.iloc[t] = func_weighting(p, *args, **kwargs)
+    else:
+        if model == "lstm":
+            var = prices.copy()
+            for e in prices.columns:
+                var[e] = forecast_var_from_lstm(prices[e])            
+            if hist_length > 0:
+                m = hist_length
+                for t in range(0, len(prices)-m+1):
+                    p = prices.iloc[t:t+m]
+                    v = var.iloc[t:t+m]
+                    r = p.to_returns().dropna()
+                    covar = ledoit_wolf(r)[0]
+                    for i in range(len(v.columns)):
+                        covar[i,i] += max(0,(v[v.columns[i]].iloc[-1]/100.0))
+                    pd_covar = pd.DataFrame(data=covar, columns=prices.columns)
+                    w.iloc[t+m-1] = func_weighting(pd_covar, *args, **kwargs)
     return w
 
 def to_NAV(prices, weights, init_cash=1000000):

@@ -214,8 +214,10 @@ def addFeatures(dataset):
     dataset['weekday'] = dataset.index.weekday / 4
     dataset['diff'] = diffMA(dataset.price)
     dataset['slope'] = slopeMA(dataset.price)
+    '''
     for e in dataset.columns:
         print(f"{e}: ({dataset[e].min():0.4f} : {dataset[e].max():0.4f})")
+    '''
     return dataset.dropna()
 
 # add forecast variance data as Y
@@ -253,6 +255,18 @@ def buildXY(dataset, pastDays=30):
         dataX.append(x_dataset[t:(t+m)])
         dataY.append(y_dataset[t+m-1])
     return np.array(dataX), np.array(dataY)
+
+# stucture X from dataset to forecast
+def buildX(dataset, pastDays=30):
+    """
+    Result -> numpy
+    """
+    m = pastDays
+    x_dataset = dataset.values
+    dataX = []
+    for t in range(0, len(dataset)-m+1):
+        dataX.append(x_dataset[t:(t+m)])
+    return np.array(dataX)
 
 # normalize dataset
 from sklearn.preprocessing import MinMaxScaler
@@ -306,14 +320,22 @@ def processData(dataset):
     return x_dataset, y_dataset  
 
 # lstm var
+from time import process_time
 def forecast_var_from_lstm(prices, model_path="\\keras_model\\"):
     """
     Prices is one asset's price data, in either DataFrame or Pandas Series
     """
     # Initializing Data and Load Model
+    start_time = process_time()
     dataset, model = load_keras_model(prices)
+    print(f"load data and model: {process_time()-start_time}")
+    start_time = process_time()
     dataset = addFeatures(dataset)
     x_dataset = dataset.drop(columns='price')
-    f_var = model.predict(np.array(x_dataset[-2:-1]))
-    return f_var[-1]
+    x_dataset = buildX(x_dataset)
+    print(f"process dataset: {process_time()-start_time}")
+    start_time = process_time()
+    f_var = np.append(np.zeros([len(prices)-len(x_dataset),1]), model.predict(np.array(x_dataset)))
+    print(f"calc var: {process_time()-start_time}")
+    return f_var
     
