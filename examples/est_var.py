@@ -7,7 +7,7 @@ Created on Tue Jun 25 10:17:16 2019
 import __init__
 import ffn
 from pyetf.data import eod
-from pyetf.algos import MA, liner_regression
+from pyetf.algos import MA, liner_regression, future_mean_var
 import pandas as pd
 import numpy as np
 
@@ -17,18 +17,16 @@ prices = ffn.get(
         tickers=etf_tickers, market='HK', 
         provider=eod, 
         start='2005-01-01')
-m=120
+m=30
 mean=[]
 std=[]
 
 for t in range(0,len(prices)-m+1):
     p = prices[t:t+m].values
-    dr = []
-    for d in range(1,m):
-        if p[d]<p[0]:
-            dr.append((p[d]/p[0])**(1/d)-1)
-    mean.append(np.mean(dr))
-    std.append(np.std(dr))
+    mean_t, var_t = future_mean_var(p, False)
+    mean.append(mean_t)
+    std.append(var_t**0.5)
+    
 p = prices['2800'][0:len(mean)].values
 df = pd.DataFrame({'2800':p,'mean':mean,'std':std}, index=prices.index[0:len(mean)])
 df['mal'] = MA(df['2800'],120)
@@ -42,8 +40,8 @@ df = df.dropna()
 from pyetf.figure import plot_chart
 plot_chart(
         df[['2800','mal']], 
-        df_sub=df[['zero', 'diff']],
-        df_fill=df['mean_std'])
+        sub=df[['zero', 'mean']],
+        sub_fill=df['std'])
 
 #
 df1= df[df['slope']>0]

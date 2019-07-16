@@ -331,7 +331,25 @@ def rpw_garch(prices,
     covar = ledoit_wolf(r)[0]
     for i in range(len(r.columns)):
         var, _ = forecast_var_from_garch(100.0*r[r.columns[i]])
-        covar[i,i] = (var/100.0)**(0.5)
+        covar[i,i] = (var/100.0) #**(0.5)
+    return covar
+
+from pyetf.algos import future_mean_var
+@risk_parity_weights
+def rpw_future(prices,
+               initial_weights = None,
+               risk_weights = None,
+               risk_parity_method = 'ccd',
+               maximum_iterations = 100,
+               tolerance = 1E-8,
+               min_assets_number = 2,
+               max_assets_number = 6
+               ):
+    r = prices.to_returns().dropna()
+    covar = ledoit_wolf(r)[0]
+    for i in range(len(r.columns)):
+        _, var = future_mean_var(prices[prices.columns[i]].values)
+        covar[i,i] = var*100
     return covar
 
 def to_weights(
@@ -353,6 +371,7 @@ def to_weights(
         * func_weighting (function): function to use to estimate covariance
             [default rpw_standard].
         * hist_length: Length of data to use [default 200].
+          if hist_length < 0: Use future data i.e. hist_length=-30
         * other paramters: Used in func_weighting.
             i.e. mc=[0.5, 0.3, 0.2]
             risk_weights=mc
@@ -360,24 +379,31 @@ def to_weights(
     Returns:
         Pandas Dataframe
     """
-    w = prices.copy()
-    m = hist_length
+    w = prices.copy()    
     
     for e in w.columns:
         w[e] = np.nan
     
-    # 0:m -> m
-    # python - [0:m] -> [m-1]  
-    for t in range(0, len(prices)-m+1):
-        p = prices.iloc[t:t+m]    
-        w.iloc[t+m-1] = func_weighting(p, *args, **kwargs)
-    
+    if hist_length >= 0:
+        m = hist_length
+        # 0:m -> m
+        # python - [0:m] -> [m-1]  
+        for t in range(0, len(prices)-m+1):
+            p = prices.iloc[t:t+m]    
+            w.iloc[t+m-1] = func_weighting(p, *args, **kwargs)
+    else: # hist_length < 0
+        m = -hist_length
+        for t in range(0, len(prices)-m+1):
+            p = prices.iloc[t:t+m] 
+            w.iloc[t] = func_weighting(p, *args, **kwargs)
+            
     return w
 
 def to_NAV(prices, weights, init_cash=1000000):
     portfolio = prices.copy()
     w = weights.copy()
     portfolio['NAV'] = w.sum(axis=1)
+    # cut nan
     portfolio = portfolio[portfolio.NAV>0]
     w = w.dropna()
     portfolio.iloc[0].NAV = init_cash
