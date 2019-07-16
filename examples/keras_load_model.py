@@ -9,7 +9,7 @@ import __init__
 import numpy as np
 import ffn
 from pyetf.data import eod
-from pyetf.algos import load_keras_model, processData
+from pyetf.algos import load_keras_model
 
 etf_tickers = ['SPY']
 start_date_str = '2013-01-01'
@@ -18,10 +18,8 @@ prices = ffn.get(tickers=etf_tickers, market='US',
                  start=start_date_str)
 
 for e in prices.columns:
-    # Initializing Data and Load Model
-    dataset, model = load_keras_model(prices[e])
-    # Process Dataset
-    x_dataset, y_dataset = processData(dataset)
+    # Load Model
+    x_dataset, y_dataset, model = load_keras_model(prices[e])
     # Forecast
     y_predict = model.predict(np.array(x_dataset))
     # Evaluation

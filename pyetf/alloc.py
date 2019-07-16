@@ -352,6 +352,23 @@ def rpw_future(prices,
         covar[i,i] = var*100
     return covar
 
+from pyetf.algos import forecast_var_from_lstm
+@risk_parity_weights
+def rpw_lstm(prices,
+             initial_weights = None,
+             risk_weights = None,
+             risk_parity_method = 'ccd',
+             maximum_iterations = 100,
+             tolerance = 1E-8,
+             min_assets_number = 2,
+             max_assets_number = 6
+             ):
+    r = prices.to_returns().dropna()
+    covar = ledoit_wolf(r)[0]
+    for i in range(len(prices.columns)):
+        var, _ = forecast_var_from_lstm(prices[prices.columns[i]])
+        covar[i,i] = (var/100.0) #**(0.5)
+    
 def to_weights(
         prices, 
         func_weighting=rpw_standard, 
@@ -391,7 +408,7 @@ def to_weights(
         for t in range(0, len(prices)-m+1):
             p = prices.iloc[t:t+m]    
             w.iloc[t+m-1] = func_weighting(p, *args, **kwargs)
-    else: # hist_length < 0
+    else: # hist_length < 0 : use future data
         m = -hist_length
         for t in range(0, len(prices)-m+1):
             p = prices.iloc[t:t+m] 

@@ -152,7 +152,7 @@ def future_mean_var(p, negative=False):
     mean = np.mean(dr)
     var = np.var(dr)
     return mean, var
-    
+
 # under keras model scheme
 from keras.models import Sequential
 from keras.layers import Dense, Dropout
@@ -206,10 +206,8 @@ def load_keras_model(prices, model_path="\\keras_model\\"):
      # 1. Data Process
     # 1.1 initial data
     dataset, model_filename = initData(prices, model_path)
-    # 1.2 process data
-    x_dataset, y_dataset = processData(dataset)
     model = load_model(model_filename)
-    return x_dataset, y_dataset, model
+    return dataset, model
     
 def addFeatures(dataset):
     dataset['r'] = dataset.pct_change() * 100
@@ -288,6 +286,7 @@ def initData(prices, model_path):
     else:
         e = prices.columns[0]
         dataset = prices.copy()
+    print(f"{e}")
     dataset = dataset.rename({e:'price'}, axis=1)
     model_path = os.getcwd() + model_path
     model_filename = model_path + 'est_var(' + e + ').h5'
@@ -305,3 +304,16 @@ def processData(dataset):
     # 1.5 normalization
     #x_dataset = normalise_windows(x_dataset)  
     return x_dataset, y_dataset  
+
+# lstm var
+def forecast_var_from_lstm(prices, model_path="\\keras_model\\"):
+    """
+    Prices is one asset's price data, in either DataFrame or Pandas Series
+    """
+    # Initializing Data and Load Model
+    dataset, model = load_keras_model(prices)
+    dataset = addFeatures(dataset)
+    x_dataset = dataset.drop(columns='price')
+    f_var = model.predict(np.array(x_dataset[-2:-1]))
+    return f_var[-1]
+    
