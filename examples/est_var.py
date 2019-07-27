@@ -33,14 +33,14 @@ df['mal'] = MA(df['2800'],120)
 df['mas'] = MA(df['2800'],10)
 df['diff'] = (df['mas']/df['mal']-1)/10
 df['slope'] = df['diff'].pct_change()
-df['mean_std'] = -2*df['std']+df['mean']
+df['mean_std'] = 2*df['std']-df['mean']
 df['zero'] = 0.
 df = df.dropna()
 
 from pyetf.figure import plot_chart
 plot_chart(
         df[['2800','mal']], 
-        sub=df[['zero', 'mean']],
+        sub=df[['zero', 'mean_std']],
         sub_fill=df['std'])
 
 #

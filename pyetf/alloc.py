@@ -405,16 +405,17 @@ def to_weights(
             for t in range(0, len(prices)-m+1):
                 p = prices.iloc[t:t+m]    
                 w.iloc[t+m-1] = func_weighting(p, *args, **kwargs)
-        elif hist_length > 0: # hist_length < 0 : use future data
+        elif hist_length < 0: # hist_length < 0 : use future data
             m = -hist_length
             for t in range(0, len(prices)-m+1):
                 p = prices.iloc[t:t+m] 
                 w.iloc[t] = func_weighting(p, *args, **kwargs)
     else:
         if model == "lstm":
+            from pyetf.keras_model import addFeatures
             var = prices.copy()
-            for e in prices.columns:
-                var[e] = forecast_var_from_lstm(prices[e])            
+            for e in prices.columns:                
+                var[e] = forecast_var_from_lstm(addFeatures, prices[e])            
             if hist_length > 0:
                 m = hist_length
                 for t in range(0, len(prices)-m+1):

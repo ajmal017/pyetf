@@ -4,6 +4,7 @@ import os
 import pandas as pd 
 import numpy as np
 import matplotlib.pyplot as plt
+from decorator import decorator
 
 # Moving Average  
 def MA(ds, n):  
@@ -39,6 +40,20 @@ def slopeMA(ds, m=60, dw=5):
         y = ma[t-dw+1:t+1] / ma[t-dw+1:t+1].mean() - 1           
         slope[t], _ = liner_regression(x,y)
     return slope
+
+# garch
+def addGARCH(ds, hln=60):
+    ts = 100*ds.to_returns().dropna()
+    hts = ts[:hln].values
+    var = []
+    # rolling estimate var
+    while (len(hts)<len(ts)):
+        f_var, _ =  forecast_var_from_garch(hts[-hln:])
+        var.append(f_var)
+        hts = np.append(hts, ts.iloc[len(hts)])
+    print(max(var), min(var))
+    var = np.append(np.zeros([len(ds)-len(var),1]), var)
+    return var
 
 # Seek Best Garch Model
 import statsmodels.tsa.api as smt
@@ -82,7 +97,6 @@ def seek_garch_model(TS):
     return best_aic, best_order, best_mdl
 
 #under arch model scheme
-from decorator import decorator
 @decorator
 def forecast_var(model_est_var, *args, **kwargs):                     
     """
@@ -146,6 +160,8 @@ def future_mean_var(p, negative=False):
         for d in range(1,m):  
             if p[d]<p[0]:
                 dr.append((p[d]/p[0])**(1/d)-1)
+        if len(dr) == 0:
+            dr.append(0.)
     else:
         for d in range(1,m):
             dr.append((p[d]/p[0])**(1/d)-1)
@@ -154,10 +170,7 @@ def future_mean_var(p, negative=False):
     return mean, var
 
 # under keras model scheme
-from keras.models import Sequential
-from keras.layers import Dense, Dropout
-from keras.layers import LSTM
-def strucutre_keras_model(prices, model_path="\\keras_model\\"):
+def strucutre_keras_model(train_model, addFeatures, addTarget, prices, model_path="\\keras_model\\"):
     """
     * prices: pandas series (or dataframe) with date index and prices
     * function will save model estimated by keras 
@@ -170,21 +183,15 @@ def strucutre_keras_model(prices, model_path="\\keras_model\\"):
     # 1.1 initial data
     dataset, model_filename = initData(prices, model_path)    
     # 1.2 process data
-    x_dataset, y_dataset = processData(dataset)
+    x_dataset, y_dataset = processData(addFeatures, addTarget, dataset)
     # 1.3 split train set and test set
     x_train, y_train, x_test, y_test = splitDataset(x_dataset, y_dataset)
     # 1.4 shuttle train set
     x_train, y_train = shuffleDataset(x_train, y_train)
     # 2. Build Model        
-    # 2.1 setup model
-    model = Sequential()
-    model.add(LSTM(20, input_length=x_train.shape[1], input_dim=x_train.shape[2]))
-    model.add(Dense(1))
-    model.add(Dropout(0.2))
-    model.compile(loss="mse", optimizer="adam", metrics=['accuracy'])
-    model.summary()
+    # 2.1 setup model    
     # 2.2 train model
-    model.fit(x_train, y_train, epochs=1000, batch_size=min(1000,x_train.shape[0]), verbose=1)
+    model = train_model(x_train, y_train)
     # 2.3 save model
     model.save(model_filename)
     # 3 evaluation
@@ -208,39 +215,6 @@ def load_keras_model(prices, model_path="\\keras_model\\"):
     dataset, model_filename = initData(prices, model_path)
     model = load_model(model_filename)
     return dataset, model
-    
-def addFeatures(dataset):
-    dataset['r'] = dataset.pct_change() * 100
-    dataset['weekday'] = dataset.index.weekday / 4
-    dataset['diff'] = diffMA(dataset.price)
-    dataset['slope'] = slopeMA(dataset.price)
-    '''
-    for e in dataset.columns:
-        print(f"{e}: ({dataset[e].min():0.4f} : {dataset[e].max():0.4f})")
-    '''
-    return dataset.dropna()
-
-# add forecast variance data as Y
-def addTarget(dataset, futureDays=30):
-    prices = dataset.price
-    m = futureDays
-    y_var = []
-    for t in range(0, len(prices)-m+1):
-        p = prices.iloc[t:t+m]
-        _, var = future_mean_var(p)
-        y_var.append(var*10000)
-    '''
-    # normalization
-    y_min = min(y_var)
-    y_max = max(y_var)
-    y_distance = y_max-y_min
-    for t in range(len(y_var)):
-        y_var[t] = (y_var[t]-y_min)/y_distance
-    '''
-    for t in range(len(prices)-m+1, len(prices)):
-        y_var.append(np.nan)
-    dataset['y'] = y_var
-    return dataset.dropna()
 
 # stucture X and Y from dataset
 def buildXY(dataset, pastDays=30):
@@ -292,8 +266,8 @@ def shuffleDataset(x, y):
     np.random.shuffle(randomList)
     return x[randomList], y[randomList]
 
-# initial Data
-def initData(prices, model_path):    
+# initial Data and model name
+def initData(prices, model_path, model_name='est_var'):    
     if isinstance(prices, pd.core.series.Series):
         e = prices.name
         dataset = pd.DataFrame(prices)
@@ -303,11 +277,11 @@ def initData(prices, model_path):
     print(f"{e}")
     dataset = dataset.rename({e:'price'}, axis=1)
     model_path = os.getcwd() + model_path
-    model_filename = model_path + 'est_var(' + e + ').h5'
+    model_filename = model_path + model_name + '(' + e + ').h5'
     return dataset, model_filename
     
 # process data: add features and add Y
-def processData(dataset):
+def processData(addFeatures, addTarget, dataset):
     # 1.2 add features to X
     dataset = addFeatures(dataset)
     # 1.3 add targets to Y
@@ -321,21 +295,21 @@ def processData(dataset):
 
 # lstm var
 from time import process_time
-def forecast_var_from_lstm(prices, model_path="\\keras_model\\"):
+def forecast_var_from_lstm(addFeatures, prices, model_path="\\keras_model\\"):
     """
     Prices is one asset's price data, in either DataFrame or Pandas Series
     """
     # Initializing Data and Load Model
     start_time = process_time()
     dataset, model = load_keras_model(prices)
-    print(f"load data and model: {process_time()-start_time}")
+    print(f"load data and model: {process_time()-start_time:0.4f}s")
     start_time = process_time()
     dataset = addFeatures(dataset)
     x_dataset = dataset.drop(columns='price')
     x_dataset = buildX(x_dataset)
-    print(f"process dataset: {process_time()-start_time}")
+    print(f"process dataset: {process_time()-start_time:0.4f}s")
     start_time = process_time()
     f_var = np.append(np.zeros([len(prices)-len(x_dataset),1]), model.predict(np.array(x_dataset)))
-    print(f"calc var: {process_time()-start_time}")
+    print(f"calc var: {process_time()-start_time:0.4f}s")
     return f_var
     
