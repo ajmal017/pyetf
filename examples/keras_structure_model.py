@@ -13,8 +13,11 @@ from pyetf.keras_model import train_model, addFeatures, addTarget
 etf_tickers = ['SHY','SPY','XLB','XLE','XLF','XLI','XLK','XLP','XLU','XLV','XLY']
 #etf_tickers = ['SPY']
 #etf_tickers = ['SHY','XLB','XLE','XLF','XLI','XLK','XLP','XLU','XLV','XLY']
+etf_tickers = ['IVV', 'TLT', 'IEF', 'GLD', 'DBC']; market='US'
+etf_tickers = ['2800']; market='HK'
+
 start_date_str = '2002-01-01'
-prices = ffn.get(tickers=etf_tickers, market='US', 
+prices = ffn.get(tickers=etf_tickers, market=market, 
                  provider=eod, 
                  start=start_date_str)
 

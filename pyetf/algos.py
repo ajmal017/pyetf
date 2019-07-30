@@ -42,7 +42,7 @@ def slopeMA(ds, m=60, dw=5):
     return slope
 
 # garch
-def addGARCH(ds, hln=60):
+def addGARCH(ds, hln=200):
     ts = 100*ds.to_returns().dropna()
     hts = ts[:hln].values
     var = []
@@ -52,6 +52,20 @@ def addGARCH(ds, hln=60):
         var.append(f_var)
         hts = np.append(hts, ts.iloc[len(hts)])
     print(max(var), min(var))
+    var = np.append(np.zeros([len(ds)-len(var),1]), var)
+    return var
+
+# garch
+def addVAR(ds, hln=200):
+    ts = 100*ds.to_returns().dropna()
+    hts = ts[:hln].values
+    var = []
+    # rolling estimate var
+    while (len(hts)<len(ts)):
+        f_var, _ =  forecast_var_from_constant_mean(hts[-hln:])
+        var.append(f_var)
+        hts = np.append(hts, ts.iloc[len(hts)])
+    #print(max(var), min(var))
     var = np.append(np.zeros([len(ds)-len(var),1]), var)
     return var
 
@@ -117,20 +131,20 @@ def forecast_var(model_est_var, *args, **kwargs):
     res = m.fit(update_freq=5, disp='off')
     return res.forecast().variance.values[-1][0], res.resid
 
+from arch.univariate import ConstantMean
 @forecast_var
 def forecast_var_from_constant_mean(returns):
     """
     returns is historical returns
-    """
-    from arch.univariate import ConstantMean
+    """    
     return ConstantMean(returns)
 
+from arch import arch_model
 @forecast_var
 def forecast_var_from_garch(returns):
     """
     returns is historical returns
-    """
-    from arch import arch_model
+    """    
     return arch_model(returns, vol='Garch', p=1, o=0, q=1, dist='Normal')
 
 @forecast_var
@@ -168,6 +182,20 @@ def future_mean_var(p, negative=False):
     mean = np.mean(dr)
     var = np.var(dr)
     return mean, var
+
+# future mean and var
+def future_covar(p1, p2=None):
+    """
+    p1 and p2 are numpy and prices series in future fm(30) dates
+    + historical hm(200-fm) dates
+    p1 = p2: calculate var
+    """
+    r1 = np.diff(p1)/p1[0:len(p1)-1]
+    if p2 is None:        
+        return np.var(r1)
+    else:
+        r2 = np.diff(p2)/p1[0:len(p2)-1]
+        return np.cov(r1, r2)
 
 # under keras model scheme
 def strucutre_keras_model(train_model, addFeatures, addTarget, prices, model_path="\\keras_model\\"):

@@ -209,9 +209,7 @@ def risk_parity_weights(func_covar, *args, **kwargs):
     if risk_weights is None:
         risk_weights = np.ones(n) / n
     
-    if risk_weights is not None:
-        #
-        
+    if risk_weights is not None:        
         min_n = min(n, min_n)
         max_n = min(n, max_n)
         if max_n>min_n:
@@ -316,13 +314,36 @@ def rpw_ledoit_wolf(prices,
     covar = ledoit_wolf(r)[0]
     return covar
 
+@risk_parity_weights
+def rpw_mean_var(covar,
+                 initial_weights = None,
+                 risk_weights = None,
+                 risk_parity_method = 'ccd',
+                 maximum_iterations = 100,
+                 tolerance = 1E-8,
+                 min_assets_number = 2,
+                 max_assets_number = 6
+                 ):    
+    '''r = prices.to_returns().dropna()
+    covar = r.cov().values
+    mv = []
+    for e in r.columns:
+        mv_tmp = r[e].var()*2+r[e].mean()
+        mv.append(mv_tmp)
+    for i in range(len(r.columns)):
+        if mv[i]<0:
+            f = 1 + np.sin(mv[i]*100)
+            covar[i,i] = covar[i,i] * f
+    return covar'''
+    return covar.values
+
 from pyetf.algos import forecast_var_from_garch
 @risk_parity_weights
 def rpw_garch(prices,
               initial_weights = None,
               risk_weights = None,
               risk_parity_method = 'ccd',
-              maximum_iterations = 100,
+              maximum_iterations = 1000,
               tolerance = 1E-8,
               min_assets_number = 2,
               max_assets_number = 6
@@ -331,7 +352,7 @@ def rpw_garch(prices,
     covar = ledoit_wolf(r)[0]
     for i in range(len(r.columns)):
         var, _ = forecast_var_from_garch(100.0*r[r.columns[i]])
-        covar[i,i] = (var/100.0) #**(0.5)
+        covar[i,i] += (var/10000.0) #**(0.5)
     return covar
 
 from pyetf.algos import future_mean_var
@@ -424,9 +445,41 @@ def to_weights(
                     r = p.to_returns().dropna()
                     covar = ledoit_wolf(r)[0]
                     for i in range(len(v.columns)):
-                        covar[i,i] += max(0,(v[v.columns[i]].iloc[-1]/100.0))
+                        covar[i,i] += max(0,(v[v.columns[i]].iloc[-1]/10000.0))
                     pd_covar = pd.DataFrame(data=covar, columns=prices.columns)
                     w.iloc[t+m-1] = func_weighting(pd_covar, *args, **kwargs)
+        elif model == "mean_var":
+            if hist_length > 0:
+                m = hist_length
+                mv = []
+                for t in range(0, len(prices)-m+1):
+                    p = prices.iloc[t:t+m]
+                    r = p.to_returns().dropna()
+                    v = []
+                    for e in r.columns:
+                        v_tmp = r[e].var()*2+r[e].mean()
+                        v.append(v_tmp)
+                    mv.append(v)
+                mv = pd.DataFrame(data=mv, index=prices.index[len(prices)-len(mv):len(prices)], columns=prices.columns)
+                mv_t = mv.copy()
+                uplevel=0.001
+                for e in r.columns:
+                    for t in range(1, len(mv[e])):
+                        if mv_t[e][t-1]<0:
+                            if mv[e][t]<mv_t[e][t-1]:
+                                mv_t[e][t]=mv[e][t]
+                            elif mv[e][t]<uplevel:
+                                mv_t[e][t]=mv_t[e][t-1]
+                for t in range(0, len(prices)-m+1):
+                    p = prices.iloc[t:t+m]
+                    r = p.to_returns().dropna()
+                    covar = ledoit_wolf(r)[0]                 
+                    for i in range(len(r.columns)):
+                        if mv_t[r.columns[i]][t]<0:
+                            f = 1 + np.sin(mv_t[r.columns[i]][t]*100)
+                            covar[i,i] = covar[i,i] * f                           
+                    pd_covar = pd.DataFrame(data=covar, columns=r.columns)
+                    w.iloc[t+m-1] = func_weighting(pd_covar, *args, **kwargs)                    
     return w
 
 def to_NAV(prices, weights, init_cash=1000000):

@@ -13,9 +13,9 @@ from pyetf.alloc import to_weights
 from pyetf.figure import plot_chart
 
 etf_tickers=['SHY','SPY','XLB','XLE','XLF','XLI','XLK','XLP','XLU','XLV','XLY']
-#basic_tickers = ['SHY','SPY']; etf_tickers = basic_tickers; mc_budget = [0.1, 0.9]
+basic_tickers = ['SHY','SPY']; etf_tickers = basic_tickers; mc_budget = [0.1, 0.9]
 #basic_tickers = ['SPY','XLB','XLE','XLF','XLI','XLK','XLP','XLU','XLV','XLY']; etf_tickers = basic_tickers; mc_budget = [0.6]
-mc_budget = [0.05, 0.55]
+#mc_budget = [0.05, 0.55]
 
 # retrieve data from eod and combine
 start_date_str = '2013-01-01'

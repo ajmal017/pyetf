@@ -14,7 +14,7 @@ def addFeatures(dataset):
     return addFeatures_1(dataset)
 
 def addTarget(dataset):
-    return addTarget_2(dataset)
+    return addTarget_1(dataset)
 
 def lstm_model_1(x_train, y_train):
     # 2. Build Model        
@@ -27,7 +27,7 @@ def lstm_model_1(x_train, y_train):
     model.compile(loss="mse", optimizer="adam", metrics=['accuracy'])
     model.summary()
     # 2.2 train model
-    model.fit(x_train, y_train, epochs=1000, batch_size=min(1000,x_train.shape[0]), verbose=2)
+    model.fit(x_train, y_train, epochs=100, batch_size=min(1000,x_train.shape[0]), verbose=2)
     return model
 
 def gru_model_1(x_train, y_train):
@@ -43,17 +43,23 @@ def gru_model_1(x_train, y_train):
     return model
 
 # add features variance data as X
-from pyetf.algos import diffMA, slopeMA
+from pyetf.algos import diffMA, slopeMA, addVAR
 def addFeatures_1(dataset):
     dataset['r'] = dataset.pct_change() * 100
     dataset['weekday'] = dataset.index.weekday / 4
     dataset['diff'] = diffMA(dataset.price)
     dataset['slope'] = slopeMA(dataset.price)
+    #dataset['historical_var'] = addVAR(dataset.price)
     #dataset['garch'] = addGARCH(dataset.price) # checked at 7.21 and improvement is limited.
     '''
     for e in dataset.columns:
         print(f"{e}: ({dataset[e].min():0.4f} : {dataset[e].max():0.4f})")
     '''
+    return dataset.dropna()
+
+def addFeatures_3(dataset):
+    #dataset['r'] = dataset.pct_change() * 100
+    dataset['historical_var'] = addVAR(dataset.price)
     return dataset.dropna()
 
 # add forecast variance data as Y
@@ -64,7 +70,7 @@ def addTarget_1(dataset, futureDays=30):
     y_var = []
     for t in range(0, len(prices)-m+1):
         p = prices.iloc[t:t+m]
-        _, var = future_mean_var(p)#, True)
+        _, var = future_mean_var(p)
         y_var.append(var*10000)
     '''
     # normalization
@@ -74,6 +80,19 @@ def addTarget_1(dataset, futureDays=30):
     for t in range(len(y_var)):
         y_var[t] = (y_var[t]-y_min)/y_distance
     '''
+    for t in range(len(y_var), len(prices)):
+        y_var.append(np.nan)
+    dataset['y'] = y_var
+    return dataset.dropna()
+
+def addTarget_1_minus(dataset, futureDays=30):
+    prices = dataset.price
+    m = futureDays
+    y_var = []
+    for t in range(0, len(prices)-m+1):
+        p = prices.iloc[t:t+m]
+        _, var = future_mean_var(p, True)
+        y_var.append(var*10000)
     for t in range(len(y_var), len(prices)):
         y_var.append(np.nan)
     dataset['y'] = y_var
@@ -95,6 +114,19 @@ def addTarget_2(dataset, futureDays=30, sm=5):
     for t in range(len(ym_var), len(prices)):
         ym_var.append(np.nan)
     dataset['y'] = ym_var
+    return dataset.dropna()
+
+from pyetf.algos import forecast_var_from_constant_mean
+def addTarget_3(dataset, futureDays=1, hln=200):
+    prices = dataset.price
+    m = futureDays
+    y_var = []
+    for t in range(hln, len(prices)-m+1):
+        p = prices.iloc[t-hln:t+m]
+        var, _ = forecast_var_from_constant_mean(p.to_returns().dropna())
+        y_var.append(var*10000)
+    y_var = np.append(np.zeros([len(prices)-len(y_var),1]), y_var)
+    dataset['y'] = y_var
     return dataset.dropna()
 
 # add forecast variance data as Y
