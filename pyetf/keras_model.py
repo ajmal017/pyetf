@@ -11,10 +11,10 @@ def train_model(x_train, y_train):
     return lstm_model_1(x_train, y_train)
 
 def addFeatures(dataset):
-    return addFeatures_2(dataset)
+    return addFeatures_two_1(dataset)
 
 def addTarget(dataset):
-    return addTarget_1(dataset)
+    return addTarget_two_1(dataset)
 
 def lstm_model_1(x_train, y_train):
     # 2. Build Model        

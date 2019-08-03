@@ -373,7 +373,6 @@ def rpw_future(prices,
         covar[i,i] = var*100
     return covar
 
-from pyetf.algos import forecast_var_from_lstm
 @risk_parity_weights
 def rpw_lstm(covar,
              initial_weights = None,
@@ -385,7 +384,10 @@ def rpw_lstm(covar,
              max_assets_number = 6
              ):
     return covar.values
-    
+
+from pyetf.algos import forecast_var_from_lstm
+from pyetf.algos import forecast_cov_from_lstm
+from pyetf.keras_model import addFeatures    
 def to_weights(
         prices, 
         func_weighting=rpw_standard, 
@@ -433,7 +435,6 @@ def to_weights(
                 w.iloc[t] = func_weighting(p, *args, **kwargs)
     else:
         if model == "lstm":
-            from pyetf.keras_model import addFeatures
             var = prices.copy()
             for e in prices.columns:                
                 var[e] = forecast_var_from_lstm(addFeatures, prices[e])            
@@ -448,6 +449,23 @@ def to_weights(
                         covar[i,i] += max(0,(v[v.columns[i]].iloc[-1]/10000.0))
                     pd_covar = pd.DataFrame(data=covar, columns=prices.columns)
                     w.iloc[t+m-1] = func_weighting(pd_covar, *args, **kwargs)
+        elif model == "lstm_cov":
+            pastDays=30
+            r = prices.to_returns().dropna()
+            covar = r.cov().values
+            cov = covar.tolist()
+            for i in range(len(prices.columns)):
+                for j in range(0, i+1):
+                    cov[i][j] = forecast_cov_from_lstm(addFeatures, prices[prices.columns[i]], prices[prices.columns[j]], pastDays)
+                    if i!=j:
+                        cov[j][i] = cov[i][j]
+            m = hist_length+pastDays
+            for t in range(m+30, len(prices)):
+                for i in range(len(prices.columns)):
+                    for j in range(len(prices.columns)):
+                        covar[i][j] = cov[i][j][t]
+                pd_covar = pd.DataFrame(data=covar, columns=prices.columns)
+                w.iloc[t] = func_weighting(pd_covar, *args, **kwargs)
         elif model == "mean_var":
             if hist_length > 0:
                 m = hist_length
@@ -478,7 +496,7 @@ def to_weights(
                         if mv_t[r.columns[i]][t]<0:
                             f = 1 + np.sin(mv_t[r.columns[i]][t]*100)
                             covar[i,i] = covar[i,i] * f                           
-                    pd_covar = pd.DataFrame(data=covar, columns=r.columns)
+                    pd_covar = pd.DataFrame(data=covar, columns=r.columns)                  
                     w.iloc[t+m-1] = func_weighting(pd_covar, *args, **kwargs)                    
     return w
 

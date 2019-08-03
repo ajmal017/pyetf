@@ -13,9 +13,9 @@ from pyetf.figure import plot_chart
 
 # retrieve data from eod and combine
 etf_tickers = ['IVV', 'GLD', 'VNQ', 'AGG', 'TLT', 'IEF', 'IEI', 'OIL', 'USO', 'DBC']
-etf_tickers = ['IVV', 'TLT', 'IEF', 'GLD', 'DBC']
+etf_tickers = ['IVV', 'TLT', 'IEF', 'GLD', 'DBC']; mc_budget = [0.30, 0.40, 0.15, 0.08, 0.07]
+#etf_tickers = ['IVV', 'TLT']; mc_budget = [0.30, 0.70]
 benchmark = etf_tickers[0].lower()
-mc_budget = [0.30, 0.40, 0.15, 0.08, 0.07]
 
 # retrieve data from eod and combine
 start_year = 2013; end_year=2019; end_date=str(end_year)+'-06-30'
@@ -27,7 +27,7 @@ prices = ffn.get(tickers=etf_tickers, market='US',
 minn = len(mc_budget)
 maxn = minn+4
 
-method = 'lstm'
+method = 'lstm_cov'
 
 # calc portfolio weights
 if method == 'lstm':
@@ -35,6 +35,15 @@ if method == 'lstm':
     w = prices.to_weights(
             func_weighting=rpw_lstm, 
             model="lstm", 
+            risk_weights=mc_budget,
+            min_assets_number = minn,
+            max_assets_number = maxn
+            ).dropna()
+elif method == 'lstm_cov':
+    #lstm
+    w = prices.to_weights(
+            func_weighting=rpw_lstm, 
+            model="lstm_cov", 
             risk_weights=mc_budget,
             min_assets_number = minn,
             max_assets_number = maxn

@@ -360,7 +360,7 @@ def processData(addFeatures, addTarget, dataset):
     return x_dataset, y_dataset 
 
 # process data: add features and add Y
-def processData_two(addFeatures, addTarget, dataset):    
+def processData_two(addFeatures, addTarget, dataset, pastDays=30):    
     # 1.2 add features to X
     dataset = addFeatures(dataset)
     # 1.3 add targets to Y
@@ -369,9 +369,9 @@ def processData_two(addFeatures, addTarget, dataset):
     dataset = dataset.dropna()
     dataset = dataset.drop(columns='price_one')
     dataset = dataset.drop(columns='price_two')
-    print(dataset.head())
-    print(dataset.tail())
-    x_dataset, y_dataset = buildXY(dataset)
+    #print(dataset.head())
+    #print(dataset.tail())
+    x_dataset, y_dataset = buildXY(dataset, pastDays)
     # 1.5 normalization
     #x_dataset = normalise_windows(x_dataset)  
     return x_dataset, y_dataset  
@@ -395,4 +395,24 @@ def forecast_var_from_lstm(addFeatures, prices, model_path="\\keras_model\\"):
     f_var = np.append(np.zeros([len(prices)-len(x_dataset),1]), model.predict(np.array(x_dataset)))
     print(f"calc var: {process_time()-start_time:0.4f}s")
     return f_var
-    
+
+#lstm cov
+def forecast_cov_from_lstm(addFeatures, prices_one, prices_two, pastDays=30, model_path="\\keras_model\\"):
+    """
+    Prices is one asset's price data, in either DataFrame or Pandas Series
+    """
+    # Initializing Data and Load Model
+    start_time = process_time()
+    dataset, model_filename = initData_two(prices_one, prices_two, model_path)
+    model = load_model(model_filename)
+    print(f"load data and model: {process_time()-start_time:0.4f}s")
+    start_time = process_time()
+    dataset = addFeatures(dataset)
+    dataset = dataset.drop(columns='price_one')
+    dataset = dataset.drop(columns='price_two')
+    x_dataset = buildX(dataset, pastDays)
+    print(f"process dataset: {process_time()-start_time:0.4f}s")
+    start_time = process_time()
+    f_cov = np.append(np.zeros([len(prices_one)-len(x_dataset),1]), model.predict(np.array(x_dataset)))
+    print(f"calc cov: {process_time()-start_time:0.4f}s")
+    return f_cov.tolist()
