@@ -11,7 +11,7 @@ def train_model(x_train, y_train):
     return lstm_model_1(x_train, y_train)
 
 def addFeatures(dataset):
-    return addFeatures_1(dataset)
+    return addFeatures_2(dataset)
 
 def addTarget(dataset):
     return addTarget_1(dataset)
@@ -57,10 +57,24 @@ def addFeatures_1(dataset):
     '''
     return dataset.dropna()
 
+def addFeatures_2(dataset):
+    dataset['diff'] = diffMA(dataset.price)
+    dataset['slope'] = slopeMA(dataset.price)
+    dataset['historical_var'] = addVAR(dataset.price)
+    return dataset.dropna()
+
 def addFeatures_3(dataset):
     #dataset['r'] = dataset.pct_change() * 100
     dataset['historical_var'] = addVAR(dataset.price)
     return dataset.dropna()
+
+from pyetf.algos import addCOV
+def addFeatures_two_1(dataset):
+    #dataset['r1'] = dataset[dataset.columns[0]].pct_change() * 100
+    #dataset['r2'] = dataset[dataset.columns[1]].pct_change() * 100
+    #dataset['weekday'] = dataset.index.weekday / 4
+    dataset['historical_covar'] = addCOV(dataset[dataset.columns[0]], dataset[dataset.columns[1]])
+    return dataset #dropna() at process data
 
 # add forecast variance data as Y
 from pyetf.algos import future_mean_var
@@ -144,3 +158,18 @@ def addTarget_mean(dataset, futureDays=30):
     dataset['y'] = y_m
     print(max(y_m), min(y_m))
     return dataset.dropna()
+
+def addTarget_two_1(dataset, hln=170, futureDays=30):
+    ts1 = dataset[dataset.columns[0]].to_returns().dropna()
+    ts2 = dataset[dataset.columns[1]].to_returns().dropna()
+    cov = []
+    #cov.append(np.nan) # add 1 when dropna at prices->returns 
+    for t in range(hln):
+        cov.append(np.nan)
+    for t in range(hln, len(ts1)-futureDays):        
+        f_cov = np.cov(ts1[t-hln:t+futureDays], ts2[t-hln:t+futureDays])
+        cov.append(f_cov[0][1]*10000)
+    for t in range(len(cov), len(ts1)+1):
+        cov.append(np.nan)
+    dataset['y'] = cov
+    return dataset

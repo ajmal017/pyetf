@@ -27,7 +27,7 @@ prices = ffn.get(tickers=etf_tickers, market='US',
 minn = len(mc_budget)
 maxn = minn+4
 
-method = 'standard'
+method = 'lstm'
 
 # calc portfolio weights
 if method == 'lstm':

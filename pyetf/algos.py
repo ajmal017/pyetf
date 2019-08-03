@@ -55,7 +55,7 @@ def addGARCH(ds, hln=200):
     var = np.append(np.zeros([len(ds)-len(var),1]), var)
     return var
 
-# garch
+# historical var
 def addVAR(ds, hln=200):
     ts = 100*ds.to_returns().dropna()
     hts = ts[:hln].values
@@ -68,6 +68,19 @@ def addVAR(ds, hln=200):
     #print(max(var), min(var))
     var = np.append(np.zeros([len(ds)-len(var),1]), var)
     return var
+
+# historical cov
+def addCOV(ds1, ds2, hln=200):
+    ts1 = ds1.to_returns().dropna().values
+    ts2 = ds2.to_returns().dropna().values
+    cov = []
+    #cov.append(np.nan) # add 1 when dropna at prices->returns 
+    for t in range(hln):
+        cov.append(np.nan)
+    for t in range(hln, len(ts1)+1):
+        f_cov = np.cov(ts1[t-hln:t], ts2[t-hln:t])
+        cov.append(f_cov[0][1]*10000)
+    return cov
 
 # Seek Best Garch Model
 import statsmodels.tsa.api as smt
@@ -198,7 +211,7 @@ def future_covar(p1, p2=None):
         return np.cov(r1, r2)
 
 # under keras model scheme
-def strucutre_keras_model(train_model, addFeatures, addTarget, prices, model_path="\\keras_model\\"):
+def strucutre_keras_model(train_model, addFeatures, addTarget, prices, prices_two=None, model_path="\\keras_model\\"):
     """
     * prices: pandas series (or dataframe) with date index and prices
     * function will save model estimated by keras 
@@ -208,10 +221,14 @@ def strucutre_keras_model(train_model, addFeatures, addTarget, prices, model_pat
     model_load = load_model('est_var(_ticker_).h5')
     """
     # 1. Data Process
-    # 1.1 initial data
-    dataset, model_filename = initData(prices, model_path)    
+    if prices_two is None:
+    # 1.1 initial data    
+        dataset, model_filename = initData(prices, model_path)
     # 1.2 process data
-    x_dataset, y_dataset = processData(addFeatures, addTarget, dataset)
+        x_dataset, y_dataset = processData(addFeatures, addTarget, dataset)
+    else:
+        dataset, model_filename = initData_two(prices, prices_two, model_path)
+        x_dataset, y_dataset = processData_two(addFeatures, addTarget, dataset)
     # 1.3 split train set and test set
     x_train, y_train, x_test, y_test = splitDataset(x_dataset, y_dataset)
     # 1.4 shuttle train set
@@ -307,6 +324,27 @@ def initData(prices, model_path, model_name='est_var'):
     model_path = os.getcwd() + model_path
     model_filename = model_path + model_name + '(' + e + ').h5'
     return dataset, model_filename
+
+# initial Data and model name
+def initData_two(prices_one, prices_two, model_path, model_name='est_cov'):    
+    if isinstance(prices_one, pd.core.series.Series):
+        e1 = prices_one.name
+        dataset = pd.DataFrame(prices_one)
+    else:
+        e1 = prices_one.columns[0]
+        dataset = prices_one.copy()
+    dataset = dataset.rename({e1:'price_one'}, axis=1)
+    if isinstance(prices_two, pd.core.series.Series):
+        e2 = prices_two.name
+        dataset[e2] = pd.DataFrame(prices_two)
+    else:
+        e2 = prices_two.columns[0]
+        dataset[e2] = prices_two.columns[0]          
+    dataset = dataset.rename({e2:'price_two'}, axis=1)
+    print(f"{e1} {e2}")
+    model_path = os.getcwd() + model_path
+    model_filename = model_path + model_name + '(' + e1+'_'+e2 + ').h5'
+    return dataset, model_filename
     
 # process data: add features and add Y
 def processData(addFeatures, addTarget, dataset):
@@ -316,6 +354,23 @@ def processData(addFeatures, addTarget, dataset):
     dataset = addTarget(dataset)
     # 1.4 structure train and test data
     dataset = dataset.drop(columns='price')
+    x_dataset, y_dataset = buildXY(dataset)
+    # 1.5 normalization
+    #x_dataset = normalise_windows(x_dataset)  
+    return x_dataset, y_dataset 
+
+# process data: add features and add Y
+def processData_two(addFeatures, addTarget, dataset):    
+    # 1.2 add features to X
+    dataset = addFeatures(dataset)
+    # 1.3 add targets to Y
+    dataset = addTarget(dataset)
+    # 1.4 structure train and test data
+    dataset = dataset.dropna()
+    dataset = dataset.drop(columns='price_one')
+    dataset = dataset.drop(columns='price_two')
+    print(dataset.head())
+    print(dataset.tail())
     x_dataset, y_dataset = buildXY(dataset)
     # 1.5 normalization
     #x_dataset = normalise_windows(x_dataset)  
