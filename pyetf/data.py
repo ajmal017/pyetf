@@ -92,7 +92,7 @@ def eod(ticker="AAPL", market="US",
         * end (string, number): retrieve data until end date
             if None, retrieve until latest date 
     """
-    api_token = "5cebe613e02010.08022109"
+    api_token = "***"
     session = None
     if field is None:
         field = "Adjusted_close"
@@ -141,7 +141,7 @@ def tushare(ticker="510310", market="SH", asset="FD",
         * end (string, number): retrieve data until end date
             if None, retrieve until latest date 
     """
-    api_token = "6feca07b866ea55bd6024aa5a8891d7bc11afd829d1386c8a2fc8d89"
+    api_token = "***"
     if field is None:
         field = "close"
     ts.set_token(api_token)
